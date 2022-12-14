@@ -2,63 +2,71 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
+	"io/ioutil"
 	"log"
+	"net/http"
 )
 
-type Person struct {
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
-	HairColor string `json:"hair_color"`
-	HasDog    bool   `json:"has_dog"`
+type Result struct {
+	Name, Description, URL string
+}
+
+type SearchResults struct {
+	ready  bool
+	Query  string
+	Result []Result
+}
+
+func (sr *SearchResults) UnmarshalJSON(bs []byte) error {
+	array := []interface{}{}
+	if err := json.Unmarshal(bs, &array); err != nil {
+		return err
+	}
+	sr.Query = array[0].(string)
+	for i := range array[1].([]interface{}) {
+		sr.Result = append(sr.Result, Result{
+			array[1].([]interface{})[i].(string),
+			array[2].([]interface{})[i].(string),
+			array[3].([]interface{})[i].(string),
+		})
+	}
+	return nil
+}
+
+// This func will get and return result from Wikipedia
+func wikipediaAPI(request string) (answer []string) {
+	// Slice of 3 elements
+	s := make([]string, 3)
+
+	//Send request
+	if response, err := http.Get(request); err != nil {
+		s[0] = "Wikipedia is not responds"
+	} else {
+		defer response.Body.Close()
+
+		//Read answer
+		contents, err := ioutil.ReadAll(response.Body)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		sr := &SearchResults{}
+		if err = json.Unmarshal([]byte(contents), sr); err != nil {
+			s[0] = "Something going wrong, try to change your question"
+		}
+
+		if !sr.ready {
+			s[0] = "Something going wrong, try to change your question"
+		}
+
+		for i := range sr.Result {
+			s[i] = sr.Result[i].URL
+		}
+	}
+	return s
+
 }
 
 func main() {
-	myJson := `
-	[
-		{
-			"first_name": "Clark",
-			"last_name": "Kent",
-			"hair_color": "black",
-			"has_dog": true
-		},
-		{
-			"first_name": "Bruce",
-			"last_name": "Wayne",
-			"hair_color": "black",
-			"has_dog": false
-		}
-	]`
-
-	var unmarshalled []Person
-
-	err := json.Unmarshal([]byte(myJson), &unmarshalled)
-	if err != nil {
-		log.Println("Error ", err)
-	}
-	log.Printf("unmarshalled: %v", unmarshalled)
-
-	// write json from a struct
-	var mySlice []Person
-	var m1 Person
-	m1.FirstName = "Wally"
-	m1.LastName = "West"
-	m1.HairColor = "Red"
-	m1.HasDog = false
-	mySlice = append(mySlice, m1)
-
-	var m2 Person
-	m2.FirstName = "Diana"
-	m2.LastName = "Prince"
-	m2.HairColor = "black"
-	m2.HasDog = false
-	mySlice = append(mySlice, m2)
-	
-	newJSON, err := json.MarshalIndent(mySlice, "", "  ")
-	if err != nil {
-		log.Println("Error marshalling", err)
-	}
-
-	fmt.Println(string(newJSON))
 
 }
